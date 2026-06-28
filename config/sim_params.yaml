@@ -1,0 +1,4 @@
+control_node:
+  ros__parameters:
+    max_linear_vel: 3.0    # m/s  — top travel speed
+    max_angular_vel: 0.5   # rad/s
