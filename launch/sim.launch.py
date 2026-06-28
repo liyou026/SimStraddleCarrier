@@ -7,24 +7,25 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     pkg = get_package_share_directory("sim_straddle_carrier")
-    xacro_file = os.path.join(pkg, "description", "urdf", "straddle_carrier.urdf.xacro")
+    xacro_file  = os.path.join(pkg, "description", "urdf", "straddle_carrier.urdf.xacro")
+    world_file  = os.path.join(pkg, "worlds", "port_yard.sdf")
+    gz_sim_launch = os.path.join(
+        get_package_share_directory("ros_gz_sim"), "launch", "gz_sim.launch.py")
 
     # ── Arguments ─────────────────────────────────────────────────────────────
-    world_arg   = DeclareLaunchArgument(
-        "world", default_value=os.path.join(pkg, "worlds", "port_yard.sdf"),
-        description="Path to the Gazebo SDF world file")
     use_rviz_arg = DeclareLaunchArgument(
         "use_rviz", default_value="false", description="Launch RViz2")
     x_arg   = DeclareLaunchArgument("x",   default_value="0.0")
     y_arg   = DeclareLaunchArgument("y",   default_value="0.0")
-    z_arg   = DeclareLaunchArgument("z",   default_value="0.8")   # above ground
+    z_arg   = DeclareLaunchArgument("z",   default_value="0.8")
     yaw_arg = DeclareLaunchArgument("yaw", default_value="0.0")
 
     # ── Robot State Publisher (xacro → URDF at launch time) ───────────────────
@@ -34,18 +35,16 @@ def generate_launch_description():
         name="robot_state_publisher",
         output="screen",
         parameters=[{
-            "robot_description": Command(["xacro ", xacro_file]),
+            "robot_description": ParameterValue(Command(["xacro ", xacro_file]), value_type=str),
             "use_sim_time": True,
         }],
     )
 
     # ── Gazebo Harmonic ────────────────────────────────────────────────────────
+    # gz_args is built as a plain string to avoid NoneType substitution issues
     gz_sim = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([
-                FindPackageShare("ros_gz_sim"), "launch", "gz_sim.launch.py"])
-        ),
-        launch_arguments={"gz_args": [LaunchConfiguration("world"), " -r"]}.items(),
+        PythonLaunchDescriptionSource(gz_sim_launch),
+        launch_arguments={"gz_args": f"{world_file} -r"}.items(),
     )
 
     # ── Spawn robot ────────────────────────────────────────────────────────────
@@ -105,7 +104,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        world_arg, use_rviz_arg, x_arg, y_arg, z_arg, yaw_arg,
+        use_rviz_arg, x_arg, y_arg, z_arg, yaw_arg,
         robot_state_publisher,
         gz_sim,
         spawn_robot,
