@@ -2,11 +2,13 @@
 <sdf version="1.10">
   <world name="port_yard">
 
+    <!-- Physics -->
     <physics name="1ms" type="ignored">
       <max_step_size>0.001</max_step_size>
       <real_time_factor>1.0</real_time_factor>
     </physics>
 
+    <!-- Required world-level plugins -->
     <plugin filename="gz-sim-physics-system"
             name="gz::sim::systems::Physics"/>
     <plugin filename="gz-sim-user-commands-system"
@@ -15,12 +17,8 @@
             name="gz::sim::systems::SceneBroadcaster"/>
     <plugin filename="gz-sim-contact-system"
             name="gz::sim::systems::Contact"/>
-    <plugin filename="gz-sim-sensors-system"
-            name="gz::sim::systems::Sensors">
-      <render_engine>ogre2</render_engine>
-    </plugin>
 
-    <!-- Sun -->
+    <!-- Sun — directional light -->
     <light name="sun" type="directional">
       <cast_shadows>true</cast_shadows>
       <pose>0 0 100 0 0 0</pose>
@@ -29,15 +27,33 @@
       <direction>-0.5 0.1 -0.9</direction>
     </light>
 
-    <!-- Ground plane — concrete texture -->
+    <!-- Ground plane — 200 x 200 m grey concrete -->
     <model name="ground_plane">
       <static>true</static>
       <link name="link">
         <collision name="col">
-          <geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
+          <surface>
+            <friction>
+              <ode>
+                <mu>0.8</mu>
+                <mu2>0.8</mu2>
+              </ode>
+            </friction>
+          </surface>
         </collision>
         <visual name="vis">
-          <geometry><plane><normal>0 0 1</normal><size>200 200</size></plane></geometry>
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
           <material>
             <ambient>0.55 0.55 0.55 1</ambient>
             <diffuse>0.55 0.55 0.55 1</diffuse>
@@ -46,84 +62,28 @@
       </link>
     </model>
 
-    <!-- ── ISO shipping containers (20 ft ≈ 6.1 × 2.44 × 2.59 m) ──────── -->
-    <xacro:macro name="container" params="name px py yaw color_r color_g color_b">
-      <model name="${name}">
-        <static>true</static>
-        <pose>${px} ${py} 1.295 0 0 ${yaw}</pose>
-        <link name="link">
-          <collision name="col">
-            <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          </collision>
-          <visual name="vis">
-            <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-            <material>
-              <ambient>${color_r} ${color_g} ${color_b} 1</ambient>
-              <diffuse>${color_r} ${color_g} ${color_b} 1</diffuse>
-            </material>
-          </visual>
-        </link>
-      </model>
-    </xacro:macro>
-
-    <!-- Row A — 4 containers -->
+    <!-- 40ft ISO container — interfaces.md §3: 12.192 x 2.438 x 2.591 m -->
     <model name="container_A1">
       <static>true</static>
-      <pose>10 0 1.295 0 0 0</pose>
+      <pose>20 0 1.2955 0 0 0</pose>
       <link name="link">
-        <collision name="col"><geometry><box><size>6.1 2.44 2.59</size></box></geometry></collision>
+        <collision name="col">
+          <geometry>
+            <box>
+              <size>12.192 2.438 2.591</size>
+            </box>
+          </geometry>
+        </collision>
         <visual name="vis">
-          <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          <material><ambient>0.8 0.2 0.2 1</ambient><diffuse>0.8 0.2 0.2 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="container_A2">
-      <static>true</static>
-      <pose>17 0 1.295 0 0 0</pose>
-      <link name="link">
-        <collision name="col"><geometry><box><size>6.1 2.44 2.59</size></box></geometry></collision>
-        <visual name="vis">
-          <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          <material><ambient>0.2 0.6 0.8 1</ambient><diffuse>0.2 0.6 0.8 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="container_A3">
-      <static>true</static>
-      <pose>24 0 1.295 0 0 0</pose>
-      <link name="link">
-        <collision name="col"><geometry><box><size>6.1 2.44 2.59</size></box></geometry></collision>
-        <visual name="vis">
-          <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          <material><ambient>0.2 0.8 0.3 1</ambient><diffuse>0.2 0.8 0.3 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <!-- Row B — stacked 2-high -->
-    <model name="container_B1_bottom">
-      <static>true</static>
-      <pose>10 12 1.295 0 0 0</pose>
-      <link name="link">
-        <collision name="col"><geometry><box><size>6.1 2.44 2.59</size></box></geometry></collision>
-        <visual name="vis">
-          <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          <material><ambient>0.8 0.5 0.1 1</ambient><diffuse>0.8 0.5 0.1 1</diffuse></material>
-        </visual>
-      </link>
-    </model>
-
-    <model name="container_B1_top">
-      <static>true</static>
-      <pose>10 12 3.885 0 0 0</pose>
-      <link name="link">
-        <collision name="col"><geometry><box><size>6.1 2.44 2.59</size></box></geometry></collision>
-        <visual name="vis">
-          <geometry><box><size>6.1 2.44 2.59</size></box></geometry>
-          <material><ambient>0.6 0.1 0.8 1</ambient><diffuse>0.6 0.1 0.8 1</diffuse></material>
+          <geometry>
+            <box>
+              <size>12.192 2.438 2.591</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.8 0.15 0.15 1</ambient>
+            <diffuse>0.8 0.15 0.15 1</diffuse>
+          </material>
         </visual>
       </link>
     </model>
