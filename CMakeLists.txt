@@ -23,7 +23,7 @@ target_include_directories(control_node PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(control_node PUBLIC cxx_std_17)
 ament_target_dependencies(control_node
-  rclcpp geometry_msgs nav_msgs std_msgs tf2 tf2_ros)
+  rclcpp geometry_msgs nav_msgs sensor_msgs std_msgs tf2 tf2_ros)
 
 install(TARGETS control_node DESTINATION lib/${PROJECT_NAME})
 
