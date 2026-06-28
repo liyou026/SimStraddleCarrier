@@ -28,7 +28,6 @@ ament_target_dependencies(control_node
 install(TARGETS control_node DESTINATION lib/${PROJECT_NAME})
 
 # ── Python scripts ────────────────────────────────────────────────────────────
-ament_python_install_package(scripts)
 install(PROGRAMS
   scripts/teleop.py
   DESTINATION lib/${PROJECT_NAME})

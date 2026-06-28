@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 """Keyboard teleoperation for the Straddle Carrier simulation.
 
 Topics published:
@@ -6,7 +6,16 @@ Topics published:
   /spreader/cmd              (std_msgs/Float64)      — spreader height setpoint [0, 9] m
 """
 
+import os
 import sys
+
+# Re-exec with system Python 3.12 if invoked via conda/wrong interpreter.
+# rclpy is built against /usr/bin/python3 (3.12); conda's python3 (3.13) lacks
+# the compiled _rclpy_pybind11 extension.
+_ROS_PYTHON = "/usr/bin/python3"
+if sys.executable != _ROS_PYTHON and os.path.isfile(_ROS_PYTHON):
+    os.execv(_ROS_PYTHON, [_ROS_PYTHON] + sys.argv)
+
 import termios
 import tty
 
