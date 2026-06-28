@@ -1,156 +1,254 @@
 <?xml version="1.0"?>
 <robot name="straddle_carrier" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <!-- ── Parameters ─────────────────────────────────────────────────────── -->
-  <xacro:property name="portal_width"   value="9.0"/>   <!-- m, outer span -->
-  <xacro:property name="portal_length"  value="6.0"/>   <!-- m, front-rear -->
-  <xacro:property name="portal_height"  value="14.0"/>  <!-- m, top of frame -->
-  <xacro:property name="beam_thickness" value="0.5"/>
-  <xacro:property name="wheel_radius"   value="0.75"/>
-  <xacro:property name="wheel_width"    value="0.45"/>
-  <xacro:property name="mass_body"      value="40000"/>  <!-- kg -->
-  <xacro:property name="mass_wheel"     value="500"/>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Properties — all values from interfaces.md §1 and §2
+       ══════════════════════════════════════════════════════════════════════ -->
 
-  <!-- ── Inertia macros ─────────────────────────────────────────────────── -->
+  <!-- Vehicle dimensions (interfaces.md §1) -->
+  <xacro:property name="portal_outer_width"  value="9.5"/>    <!-- m, centre-to-centre outer tyre pairs -->
+  <xacro:property name="portal_inner_width"  value="6.0"/>    <!-- m, clear span over container row -->
+  <xacro:property name="wheelbase"           value="9.5"/>    <!-- m, front axle to rear axle -->
+  <xacro:property name="portal_height"       value="13.5"/>   <!-- m, top of structural frame -->
+  <xacro:property name="wheel_radius"        value="0.75"/>   <!-- m, 18.00R25 industrial tyre -->
+  <xacro:property name="wheel_width"         value="0.55"/>   <!-- m -->
+
+  <!-- Spreader dimensions (interfaces.md §2) -->
+  <xacro:property name="spreader_length"     value="12.192"/> <!-- m, 40ft ISO -->
+  <xacro:property name="spreader_width"      value="2.438"/>  <!-- m, 40ft ISO -->
+  <xacro:property name="spreader_thickness"  value="0.3"/>    <!-- m -->
+  <xacro:property name="spreader_lift_max"   value="9.0"/>    <!-- m, joint upper limit -->
+
+  <!-- Portal frame cross-section (structural leg / top beam depth) -->
+  <xacro:property name="frame_thickness"     value="0.8"/>    <!-- m -->
+
+  <!-- Masses (model_agent.md §3) -->
+  <xacro:property name="mass_portal"         value="38000"/>  <!-- kg, base_link -->
+  <xacro:property name="mass_wheel"          value="600"/>    <!-- kg, each wheel -->
+  <xacro:property name="mass_spreader"       value="3000"/>   <!-- kg, spreader_link -->
+
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Inertia helper macros
+       ══════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Solid box: x=length(X) y=width(Y) z=height(Z) -->
   <xacro:macro name="box_inertia" params="m x y z">
     <inertial>
       <mass value="${m}"/>
       <inertia
-        ixx="${m*(y*y+z*z)/12}" ixy="0" ixz="0"
-        iyy="${m*(x*x+z*z)/12}" iyz="0"
-        izz="${m*(x*x+y*y)/12}"/>
+        ixx="${m*(y*y + z*z)/12}" ixy="0" ixz="0"
+        iyy="${m*(x*x + z*z)/12}" iyz="0"
+        izz="${m*(x*x + y*y)/12}"/>
     </inertial>
   </xacro:macro>
 
-  <xacro:macro name="cylinder_inertia" params="m r h">
+  <!--
+    Cylinder inertia for a wheel whose spin axis is Y (link frame).
+    Visual/collision geometry is declared with rpy="pi/2 0 0" so the
+    cylinder long-axis (URDF default = Z) tips into Y.  The inertia
+    tensor is expressed in the same link frame:
+      Iyy  = m*r^2/2                   (about spin axis = Y)
+      Ixx  = Izz = m*(3r^2+h^2)/12    (about diameter axes)
+    where h = wheel_width.
+  -->
+  <xacro:macro name="wheel_inertia" params="m r h">
     <inertial>
       <mass value="${m}"/>
       <inertia
-        ixx="${m*(3*r*r+h*h)/12}" ixy="0" ixz="0"
-        iyy="${m*(3*r*r+h*h)/12}" iyz="0"
-        izz="${m*r*r/2}"/>
+        ixx="${m*(3*r*r + h*h)/12}" ixy="0" ixz="0"
+        iyy="${m*r*r/2}"            iyz="0"
+        izz="${m*(3*r*r + h*h)/12}"/>
     </inertial>
   </xacro:macro>
 
-  <!-- ── Base footprint ─────────────────────────────────────────────────── -->
+  <!-- ══════════════════════════════════════════════════════════════════════
+       base_footprint  (virtual link — origin on ground, vehicle centre)
+       ══════════════════════════════════════════════════════════════════════ -->
   <link name="base_footprint"/>
 
+  <!-- Fixed lift to wheel-centre height (interfaces.md §7) -->
   <joint name="base_footprint_joint" type="fixed">
     <parent link="base_footprint"/>
     <child  link="base_link"/>
     <origin xyz="0 0 ${wheel_radius}" rpy="0 0 0"/>
   </joint>
 
-  <!-- ── Portal frame body (simplified as three beams) ─────────────────── -->
+  <!-- ══════════════════════════════════════════════════════════════════════
+       base_link  — portal frame modelled as three boxes
+       (model_agent.md §1: left leg, right leg, top beam)
+
+       base_link frame origin = wheel-centre height above ground.
+       In base_link frame:
+         ground plane  : z = -wheel_radius  = -0.75 m
+         top of portal : z = portal_height - wheel_radius = 12.75 m
+         leg centre z  : portal_height/2 - wheel_radius  =  6.00 m
+         top-beam ctr z: portal_height - wheel_radius - frame_thickness/2 = 12.35 m
+       ══════════════════════════════════════════════════════════════════════ -->
   <link name="base_link">
-    <xacro:box_inertia m="${mass_body}"
-      x="${portal_length}" y="${portal_width}" z="${beam_thickness}"/>
-    <!-- Top beam -->
+
+    <!-- Inertia: bounding box approximation of portal frame mass distribution -->
+    <xacro:box_inertia m="${mass_portal}"
+      x="${wheelbase + frame_thickness}"
+      y="${portal_outer_width}"
+      z="${portal_height}"/>
+
+    <!-- Left leg (positive Y side, ROS convention: Y = left) -->
     <visual>
-      <origin xyz="0 0 ${portal_height - beam_thickness/2}"/>
+      <origin xyz="0 ${portal_outer_width/2} ${portal_height/2 - wheel_radius}" rpy="0 0 0"/>
       <geometry>
-        <box size="${portal_length} ${portal_width} ${beam_thickness}"/>
+        <box size="${wheelbase} ${frame_thickness} ${portal_height}"/>
       </geometry>
-      <material name="yellow"><color rgba="0.9 0.8 0.0 1"/></material>
+      <material name="yellow"><color rgba="0.95 0.80 0.0 1"/></material>
     </visual>
-    <!-- Left leg -->
-    <visual>
-      <origin xyz="0 ${portal_width/2 - beam_thickness/2} ${portal_height/2}"/>
+    <collision>
+      <origin xyz="0 ${portal_outer_width/2} ${portal_height/2 - wheel_radius}" rpy="0 0 0"/>
       <geometry>
-        <box size="${portal_length} ${beam_thickness} ${portal_height}"/>
+        <box size="${wheelbase} ${frame_thickness} ${portal_height}"/>
       </geometry>
-      <material name="yellow"/>
-    </visual>
-    <!-- Right leg -->
+    </collision>
+
+    <!-- Right leg (negative Y side) -->
     <visual>
-      <origin xyz="0 ${-(portal_width/2 - beam_thickness/2)} ${portal_height/2}"/>
+      <origin xyz="0 ${-portal_outer_width/2} ${portal_height/2 - wheel_radius}" rpy="0 0 0"/>
       <geometry>
-        <box size="${portal_length} ${beam_thickness} ${portal_height}"/>
+        <box size="${wheelbase} ${frame_thickness} ${portal_height}"/>
       </geometry>
       <material name="yellow"/>
     </visual>
     <collision>
-      <origin xyz="0 0 ${portal_height/2}"/>
+      <origin xyz="0 ${-portal_outer_width/2} ${portal_height/2 - wheel_radius}" rpy="0 0 0"/>
       <geometry>
-        <box size="${portal_length} ${portal_width} ${portal_height}"/>
+        <box size="${wheelbase} ${frame_thickness} ${portal_height}"/>
       </geometry>
     </collision>
+
+    <!-- Top beam (spans full outer width) -->
+    <visual>
+      <origin xyz="0 0 ${portal_height - wheel_radius - frame_thickness/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${wheelbase} ${portal_outer_width} ${frame_thickness}"/>
+      </geometry>
+      <material name="yellow"/>
+    </visual>
+    <collision>
+      <origin xyz="0 0 ${portal_height - wheel_radius - frame_thickness/2}" rpy="0 0 0"/>
+      <geometry>
+        <box size="${wheelbase} ${portal_outer_width} ${frame_thickness}"/>
+      </geometry>
+    </collision>
+
   </link>
 
-  <!-- ── Wheel macro ────────────────────────────────────────────────────── -->
-  <!--
-    pos: FR=front-right, FL=front-left, RR=rear-right, RL=rear-left
-    x_sign: +1 front / -1 rear
-    y_sign: +1 left  / -1 right (ROS convention)
-  -->
-  <xacro:macro name="wheel" params="name x_sign y_sign">
-    <link name="${name}_wheel_link">
-      <xacro:cylinder_inertia m="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Wheel macro
+       params:
+         prefix  — e.g. "front_left"  (produces ${prefix}_wheel_link / _joint)
+         x_sign  — +1 front / -1 rear
+         y_sign  — +1 left  / -1 right
+
+       Joint axis = Y (interfaces.md §4).
+       Cylinder visual tipped with rpy="pi/2 0 0" so the long axis tips to Y.
+
+       Wheel joint origin z = 0 because base_link is already at wheel-centre
+       height (interfaces.md §7).
+       ══════════════════════════════════════════════════════════════════════ -->
+  <xacro:macro name="wheel" params="prefix x_sign y_sign">
+
+    <link name="${prefix}_wheel_link">
+      <xacro:wheel_inertia m="${mass_wheel}" r="${wheel_radius}" h="${wheel_width}"/>
       <visual>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
-        <material name="dark"><color rgba="0.2 0.2 0.2 1"/></material>
+        <material name="dark_grey"><color rgba="0.2 0.2 0.2 1"/></material>
       </visual>
       <collision>
+        <origin xyz="0 0 0" rpy="${pi/2} 0 0"/>
         <geometry>
           <cylinder radius="${wheel_radius}" length="${wheel_width}"/>
         </geometry>
       </collision>
     </link>
 
-    <joint name="${name}_wheel_joint" type="continuous">
+    <joint name="${prefix}_wheel_joint" type="continuous">
       <parent link="base_link"/>
-      <child  link="${name}_wheel_link"/>
+      <child  link="${prefix}_wheel_link"/>
       <origin
-        xyz="${x_sign * portal_length/2} ${y_sign * portal_width/2} ${-wheel_radius}"
-        rpy="${pi/2} 0 0"/>
-      <axis xyz="0 0 1"/>
+        xyz="${x_sign * wheelbase/2} ${y_sign * portal_outer_width/2} 0"
+        rpy="0 0 0"/>
+      <axis xyz="0 1 0"/>
     </joint>
 
-    <!-- Gazebo Harmonic friction/contact -->
-    <gazebo reference="${name}_wheel_link">
+    <!-- Gazebo contact properties for this wheel -->
+    <gazebo reference="${prefix}_wheel_link">
       <mu1>1.0</mu1>
       <mu2>1.0</mu2>
       <kp>1e6</kp>
       <kd>100</kd>
     </gazebo>
+
   </xacro:macro>
 
-  <xacro:wheel name="front_left"  x_sign="1"  y_sign="1"/>
-  <xacro:wheel name="front_right" x_sign="1"  y_sign="-1"/>
-  <xacro:wheel name="rear_left"   x_sign="-1" y_sign="1"/>
-  <xacro:wheel name="rear_right"  x_sign="-1" y_sign="-1"/>
+  <!-- Instantiate the four wheels (joint names match interfaces.md §4 exactly) -->
+  <xacro:wheel prefix="front_left"  x_sign="1"  y_sign="1"/>
+  <xacro:wheel prefix="front_right" x_sign="1"  y_sign="-1"/>
+  <xacro:wheel prefix="rear_left"   x_sign="-1" y_sign="1"/>
+  <xacro:wheel prefix="rear_right"  x_sign="-1" y_sign="-1"/>
 
-  <!-- ── Hoist (simplified rigid link for now) ──────────────────────────── -->
-  <link name="hoist_link">
+  <!-- ══════════════════════════════════════════════════════════════════════
+       spreader_link  — 40ft ISO spreader beam (interfaces.md §2)
+       ══════════════════════════════════════════════════════════════════════ -->
+  <link name="spreader_link">
+    <xacro:box_inertia m="${mass_spreader}"
+      x="${spreader_length}"
+      y="${spreader_width}"
+      z="${spreader_thickness}"/>
     <visual>
-      <geometry><box size="${portal_length - 1.0} ${portal_width - 2.0} 0.3"/></geometry>
-      <material name="gray"><color rgba="0.5 0.5 0.5 1"/></material>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${spreader_length} ${spreader_width} ${spreader_thickness}"/>
+      </geometry>
+      <material name="light_grey"><color rgba="0.7 0.7 0.7 1"/></material>
     </visual>
-    <inertial>
-      <mass value="2000"/>
-      <inertia ixx="1" ixy="0" ixz="0" iyy="1" iyz="0" izz="1"/>
-    </inertial>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${spreader_length} ${spreader_width} ${spreader_thickness}"/>
+      </geometry>
+    </collision>
   </link>
 
-  <joint name="hoist_joint" type="prismatic">
+  <!--
+    spreader_joint — prismatic, Z axis (interfaces.md §4)
+    Joint origin placed so that at position=0 the spreader sits just above ground:
+      origin z (in base_link frame) = spreader_thickness/2 - wheel_radius
+                                    = 0.15 - 0.75 = -0.60 m
+    Spreader centre above ground at position=0 : 0.75 - 0.60 + 0.15 = 0.30 m
+    Spreader centre above ground at position=9 : 9.30 m  (within portal height)
+  -->
+  <joint name="spreader_joint" type="prismatic">
     <parent link="base_link"/>
-    <child  link="hoist_link"/>
-    <origin xyz="0 0 ${portal_height * 0.6}"/>
+    <child  link="spreader_link"/>
+    <origin xyz="0 0 ${spreader_thickness/2 - wheel_radius}" rpy="0 0 0"/>
     <axis xyz="0 0 1"/>
-    <limit lower="0" upper="${portal_height * 0.35}" effort="500000" velocity="0.2"/>
+    <limit lower="0" upper="${spreader_lift_max}"
+           effort="500000" velocity="0.2"/>
   </joint>
 
-  <!-- ── Gazebo differential drive plugin ──────────────────────────────── -->
+  <!-- ══════════════════════════════════════════════════════════════════════
+       Gazebo Harmonic plugins  (interfaces.md §8)
+       ══════════════════════════════════════════════════════════════════════ -->
   <gazebo>
+
+    <!-- ── 1. DiffDrive — wheel propulsion + /odom ────────────────────── -->
     <plugin filename="gz-sim-diff-drive-system"
             name="gz::sim::systems::DiffDrive">
       <left_joint>front_left_wheel_joint</left_joint>
       <left_joint>rear_left_wheel_joint</left_joint>
       <right_joint>front_right_wheel_joint</right_joint>
       <right_joint>rear_right_wheel_joint</right_joint>
-      <wheel_separation>${portal_width}</wheel_separation>
+      <wheel_separation>${portal_outer_width}</wheel_separation>
       <wheel_radius>${wheel_radius}</wheel_radius>
       <odom_publish_frequency>50</odom_publish_frequency>
       <topic>cmd_vel</topic>
@@ -158,13 +256,29 @@
       <tf_topic>tf</tf_topic>
       <frame_id>odom</frame_id>
       <child_frame_id>base_footprint</child_frame_id>
-      <max_linear_acceleration>0.5</max_linear_acceleration>
+      <max_linear_acceleration>1.0</max_linear_acceleration>
     </plugin>
 
+    <!-- ── 2. JointPositionController — spreader height /spreader/cmd ─── -->
+    <plugin filename="gz-sim-joint-position-controller-system"
+            name="gz::sim::systems::JointPositionController">
+      <joint_name>spreader_joint</joint_name>
+      <topic>spreader/cmd</topic>
+      <p_gain>10000</p_gain>
+      <i_gain>0</i_gain>
+      <d_gain>100</d_gain>
+      <i_max>1</i_max>
+      <i_min>-1</i_min>
+      <cmd_max>500000</cmd_max>
+      <cmd_min>-500000</cmd_min>
+    </plugin>
+
+    <!-- ── 3. JointStatePublisher — /joint_states ─────────────────────── -->
     <plugin filename="gz-sim-joint-state-publisher-system"
             name="gz::sim::systems::JointStatePublisher">
       <topic>joint_states</topic>
     </plugin>
+
   </gazebo>
 
 </robot>
